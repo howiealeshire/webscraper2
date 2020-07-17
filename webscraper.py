@@ -33,19 +33,15 @@ print(data)
 
 
 def get_names_and_locations(file_path):
-    pp = pprint.PrettyPrinter(indent=4)
     df = pd.read_excel(file_path)
-    pp.pprint(df.to_dict())
-    x = list(zip(df.iloc[:, 0], df.iloc[:, 1]))
-    #return_list = ex_data['column1_name'].values.tolist()
-    return_list = []
-    return x
+    names_and_locs = list(zip(df.iloc[:, 0], df.iloc[:, 1]))
+    return names_and_locs
 
 def main():
     pass
 
 if __name__ == '__main__':
-    pp = pprint.PrettyPrinter(indent=4)
+    #pp = pprint.PrettyPrinter(indent=4)
     names_and_locs = get_names_and_locations("/Users/howie/Downloads/RA_List.xlsx")
     pp.pprint(names_and_locs)
-    print("hello")
+   # print("hello")
