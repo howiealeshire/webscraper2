@@ -72,12 +72,27 @@ def get_html_from_page(url):
 
 def parse_html(html):
     soup = BeautifulSoup(open("html_sample.html"), "html.parser")
+    def remove_line_break_and_concat(address_text):
+        address_text = str.split(address_text.get_text())
+        address_text_full = ""
+        if "<br>" in address_text:
+            address_text.remove(address_text.index("<br>"))
+        for elem in address_text:
+            address_text_full += elem + " "
+        return address_text_full
+    def get_address(soup):
+        address_html = soup[0].find('a', class_="link-to-more olnk")
+        return remove_line_break_and_concat(address_html)
+
     #results = soup.findAll('div', class_="content-label h5")
     parent_results = soup.findAll('div', class_="col-12 col-sm-11")
-    current_address = parent_results[0].find('a', class_="link-to-more olnk")
+    print(get_address(parent_results))
+
+    current_address = parent_results[0]
    # print(div.find('a')['href'])
     for x in current_address.contents:
-        print(x)
+        print("hello")
+        #print(x)
     #print(current_address)
     #current_address_text = current_address.text()
     #print(current_address_text)
