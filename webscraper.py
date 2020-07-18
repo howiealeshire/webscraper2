@@ -112,15 +112,22 @@ def parse_html(html):
         address_html = soup[0].find('a', class_="link-to-more olnk")
         return remove_line_break_and_concat(address_html)
 
-    def get_link_value(soup,index):
-        #pp.pprint(soup[index])
-        html_doc = soup[index].find('a', class_="link-to-more olnk").get_text()
-        html_doc = html_doc.replace('\n', "").strip()
+    def get_link_value(soup):
+        html_doc = soup.findAll('a', class_="link-to-more olnk")
+        num_list = []
+        for elem in html_doc:
+            if elem is not None:
+                elem = elem.get_text()
+                elem = elem.replace('\n', "").strip()
+                num_list.append(elem)
+
+        """
         if html_doc is not None:
-            soup2 = BeautifulSoup(html_doc, 'html.parser')
-        pp.pprint(html_doc)
-        #print(soup2.prettify())
-        return soup[index].find('a',class_="link-to-more olnk")
+           
+        if html_doc is not None:
+            
+        """
+        return num_list
 
     def make_parent_child_list(parent_soup):
         result_list = []
@@ -133,15 +140,30 @@ def parse_html(html):
             intermediate_list = []
         return result_list
 
-    #results = soup.findAll('div', class_="content-label h5")
-    xz = make_parent_child_list(parent_results)
-    #pp.pprint(xz)
-   # pp.pprint(xz[1][3])
+    parent_child_list = make_parent_child_list(parent_results)
+
     print(">>>>>>>>>>>>>>>")
-    yyyy = get_link_value(xz[1],3)
-    #pp.pprint(yyyy)
+    num_list = []
+    #pp.pprint(parent_child_list[1])
+    unparsed_numbers = parent_child_list[1]
+
+    for val in unparsed_numbers:
+        if val is not None and val != '\n':
+            x = get_link_value(val)
+            if x is not None:
+                num_list.append(x)
+    list_without_emptys = []
+    for elem in num_list:
+        for item in elem:
+            if len(elem) is not 0:
+                list_without_emptys.append(item)
+
+
+    pp.pprint(list_without_emptys)
+   # pp.pprint(num_list)
+    #yyyy = get_link_value(parent_child_list[1],3)
+
     print("fjdljlfldjflsjslj------------")
-    #pp.pprint(xz[1])
 
     #for elem in xz:
      #   for y in elem:
