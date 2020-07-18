@@ -100,14 +100,36 @@ def parse_html(html):
       """
     soup = BeautifulSoup(open("html_sample.html"), "html.parser")
     parent_results = soup.findAll('div', class_="col-12 col-sm-11")
-    def remove_line_break_and_concat(address_text):
-        address_text = str.split(address_text.get_text())
-        address_text_full = ""
-        if "<br>" in address_text:
-            address_text.remove(address_text.index("<br>"))
-        for elem in address_text:
-            address_text_full += elem + " "
-        return address_text_full
+
+    #accepts html
+    def remove_line_break_and_concat(html_elem):
+        html_elem = str.split(html_elem.get_text())
+        parsed_text_full = ""
+        if "<br>" in html_elem:
+            html_elem.remove(html_elem.index("<br>"))
+        for elem in html_elem:
+            parsed_text_full += elem + " "
+        parsed_text_full = parsed_text_full.strip()
+        return parsed_text_full
+
+    def get_age_and_year(original_soup):
+        results = original_soup.find('div', class_="row pl-md-2")
+        results = remove_line_break_and_concat(results.find('span', class_="content-value"))
+        pp.pprint(results)
+        #for elem in results.children:
+        #    pp.pprint(elem)
+       # pp.pprint(results)
+        return results
+    age_and_year = get_age_and_year(soup).split()
+    age = age_and_year[1]
+    year = age_and_year[2] + " " + age_and_year[3]
+    year = year.replace("(","")
+    year = year.replace(")","")
+    print("Age")
+    print(age)
+    print("Year")
+    print(year)
+
     def get_address(soup):
         address_html = soup[0].find('a', class_="link-to-more olnk")
         return remove_line_break_and_concat(address_html)
@@ -144,7 +166,7 @@ def parse_html(html):
 
     print(">>>>>>>>>>>>>>>")
     num_list = []
-    #pp.pprint(parent_child_list[1])
+    #pp.pprint(parent_child_list)
     unparsed_numbers = parent_child_list[1]
 
     for val in unparsed_numbers:
