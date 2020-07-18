@@ -71,7 +71,35 @@ def get_html_from_page(url):
 
 
 def parse_html(html):
+    pp = pprint.PrettyPrinter(indent=4)
+
+    """
+      address = get_address(parent_results)
+      for x in parent_results:
+          if x == "Phone Numbers":
+              print(x)
+      print(get_link_value(parent_results,4))
+
+      current_address = parent_results[0]
+     # print(div.find('a')['href'])
+      for x in current_address.contents:
+          print("hello")
+          #print(x)
+      #print(current_address)
+      #current_address_text = current_address.text()
+      #print(current_address_text)
+      for y in parent_results:
+          print(y.prettify())
+      #print(parent_results.prettify())
+      #for h in results:
+          #print(h.prettify())
+      #results_content = soup.findAll('div', class_="content-value")
+      #for a in results_content:
+      #    print(a.prettify())
+      #print(results.prettify())
+      """
     soup = BeautifulSoup(open("html_sample.html"), "html.parser")
+    parent_results = soup.findAll('div', class_="col-12 col-sm-11")
     def remove_line_break_and_concat(address_text):
         address_text = str.split(address_text.get_text())
         address_text_full = ""
@@ -84,25 +112,41 @@ def parse_html(html):
         address_html = soup[0].find('a', class_="link-to-more olnk")
         return remove_line_break_and_concat(address_html)
 
-    #results = soup.findAll('div', class_="content-label h5")
-    parent_results = soup.findAll('div', class_="col-12 col-sm-11")
-    print(get_address(parent_results))
+    def get_link_value(soup,index):
+        #pp.pprint(soup[index])
+        html_doc = soup[index].find('a', class_="link-to-more olnk").get_text()
+        html_doc = html_doc.replace('\n', "").strip()
+        if html_doc is not None:
+            soup2 = BeautifulSoup(html_doc, 'html.parser')
+        pp.pprint(html_doc)
+        #print(soup2.prettify())
+        return soup[index].find('a',class_="link-to-more olnk")
 
-    current_address = parent_results[0]
-   # print(div.find('a')['href'])
-    for x in current_address.contents:
-        print("hello")
-        #print(x)
-    #print(current_address)
-    #current_address_text = current_address.text()
-    #print(current_address_text)
-    #print(parent_results[0].prettify())
-    #for h in results:
-        #print(h.prettify())
-    #results_content = soup.findAll('div', class_="content-value")
-    #for a in results_content:
-    #    print(a.prettify())
-    #print(results.prettify())
+    def make_parent_child_list(parent_soup):
+        result_list = []
+        intermediate_list = []
+        for parent in parent_soup:
+            #intermediate_list.append(parent)
+            for child in parent.children:
+                intermediate_list.append(child)
+            result_list.append(intermediate_list)
+            intermediate_list = []
+        return result_list
+
+    #results = soup.findAll('div', class_="content-label h5")
+    xz = make_parent_child_list(parent_results)
+    #pp.pprint(xz)
+   # pp.pprint(xz[1][3])
+    print(">>>>>>>>>>>>>>>")
+    yyyy = get_link_value(xz[1],3)
+    #pp.pprint(yyyy)
+    print("fjdljlfldjflsjslj------------")
+    #pp.pprint(xz[1])
+
+    #for elem in xz:
+     #   for y in elem:
+      #      print(y)
+      #  print("hhhhhhhhhhhhhhhhhhhhhddhdhdhdhdhdhdhdhdhdhdhdhdhdhd")
 
 def main():
     pass
@@ -122,3 +166,8 @@ if __name__ == '__main__':
 
 
    # print("hello")
+
+
+
+#Notes
+#Discard Full Background Report/Background Report
