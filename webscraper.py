@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+import re
 import urllib.request
 import pandas as pd
 import pprint
@@ -101,6 +102,18 @@ def parse_html(html):
     soup = BeautifulSoup(open("html_sample.html"), "html.parser")
     parent_results = soup.findAll('div', class_="col-12 col-sm-11")
 
+    def make_parent_child_list(parent_soup):
+        result_list = []
+        intermediate_list = []
+        for parent in parent_soup:
+            # intermediate_list.append(parent)
+            for child in parent.children:
+                intermediate_list.append(child)
+            result_list.append(intermediate_list)
+            intermediate_list = []
+        return result_list
+
+
     #accepts html
     def remove_line_break_and_concat(html_elem):
         html_elem = str.split(html_elem.get_text())
@@ -112,28 +125,42 @@ def parse_html(html):
         parsed_text_full = parsed_text_full.strip()
         return parsed_text_full
 
-    def get_age_and_year(original_soup):
+    def get_value_title(soup, title):
+        x = soup.find(text=re.compile(title))
+        pp.pprint(x.parent.parent.parent.parent.children)
+        return x.parent.parent.parent.parent.children
+
+
+        #for elem in soup:
+            #pp.pprint(elem)
+
+        #soup = soup.find('div', class_="content-label h5")
+        #soup2 = BeautifulSoup(open("html_sample.html"), "html.parser")
+        #soup2 = soup2.find('div', class_="content-label h5")
+
+        #pp.pprint(soup2)
+
+    def get_name_age_and_year(original_soup):
         results = original_soup.find('div', class_="row pl-md-2")
+        name = results.find('span',class_="h2")
+        name = remove_line_break_and_concat(name)
         results = remove_line_break_and_concat(results.find('span', class_="content-value"))
-        pp.pprint(results)
-        #for elem in results.children:
-        #    pp.pprint(elem)
-       # pp.pprint(results)
-        return results
-    age_and_year = get_age_and_year(soup).split()
-    age = age_and_year[1]
-    year = age_and_year[2] + " " + age_and_year[3]
-    year = year.replace("(","")
-    year = year.replace(")","")
-    print("Age")
-    print(age)
-    print("Year")
-    print(year)
+        age_and_year = results.split()
+        age = age_and_year[1]
+        year = age_and_year[2] + " " + age_and_year[3]
+        year = year.replace("(", "")
+        year = year.replace(")", "")
+        return name,age,year
+
+    name,age,year = get_name_age_and_year(soup)
+    #pp.pprint(name)
+    #pp.pprint(age)
+    #pp.pprint(year)
 
     def get_address(soup):
         address_html = soup[0].find('a', class_="link-to-more olnk")
         return remove_line_break_and_concat(address_html)
-
+    #pp.pprint(get_address(parent_results))
     def get_link_value(soup):
         html_doc = soup.findAll('a', class_="link-to-more olnk")
         num_list = []
@@ -151,37 +178,63 @@ def parse_html(html):
         """
         return num_list
 
-    def make_parent_child_list(parent_soup):
-        result_list = []
-        intermediate_list = []
-        for parent in parent_soup:
-            #intermediate_list.append(parent)
-            for child in parent.children:
-                intermediate_list.append(child)
-            result_list.append(intermediate_list)
-            intermediate_list = []
-        return result_list
 
+
+    #pp.pprint(parent_results[4])
+    unparsed_emails_true = parent_results[4].findAll('div', class_="content-value")
+    email_list_parsed = []
+    for elem in unparsed_emails_true:
+        email_list_parsed.append(remove_line_break_and_concat(elem))
+    pp.pprint(email_list_parsed)
+    #pp.pprint(unparsed_emails_true)
     parent_child_list = make_parent_child_list(parent_results)
-
     print(">>>>>>>>>>>>>>>")
-    num_list = []
     #pp.pprint(parent_child_list)
+    unparsed_emails = parent_child_list[4]
+
+    #email_results =
     unparsed_numbers = parent_child_list[1]
+    #pp.pprint(parent_child_list[1])
+    def parse_values(unparsed_numbers):
+        num_list = []
+        for val in unparsed_numbers:
+            if val is not None and val != '\n':
+                x = get_link_value(val)
+                if x is not None:
+                    num_list.append(x)
+        list_without_emptys = []
+        for elem in num_list:
+            for item in elem:
+                if len(elem) is not 0:
+                    list_without_emptys.append(item)
+        return  list_without_emptys
 
-    for val in unparsed_numbers:
-        if val is not None and val != '\n':
-            x = get_link_value(val)
-            if x is not None:
-                num_list.append(x)
-    list_without_emptys = []
-    for elem in num_list:
-        for item in elem:
-            if len(elem) is not 0:
-                list_without_emptys.append(item)
 
+    val111 = get_value_title(soup,'Email Addresses')
+    for elem in val111:
+        print("hello")
+        #pp.pprint(elem)
 
-    pp.pprint(list_without_emptys)
+    def parse_emails(soup):
+        temp_soup = soup
+        temp_soup.div.extract()
+        tag = soup.b
+        for elem in temp_soup:
+            pp.pprint(elem)
+        pass
+#    pp.pprint(parse_emails(unparsed_emails))
+   # all_email_divs = val111.findAll('div', class_="col-12 col-sm-11")
+    #pp.pprint(all_email_divs)
+    print("????")
+    #pp.pprint(val111[7])
+    #email_p_child_list = make_parent_child_list(val111)
+    llllll = parse_values(val111)
+    parsed_emails = parse_values(unparsed_emails)
+    pp.pprint(parsed_emails)
+    #pp.pprint(llllll)
+    parsed_numbers = parse_values(unparsed_numbers)
+    pp.pprint(parsed_numbers)
+    #pp.pprint(list_without_emptys)
    # pp.pprint(num_list)
     #yyyy = get_link_value(parent_child_list[1],3)
 
