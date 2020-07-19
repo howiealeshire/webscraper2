@@ -191,7 +191,12 @@ def parse_html(html):
     for elem in unparsed_addresses_true:
         address_list_parsed.append(remove_line_break_and_concat(elem))
 
-    pp.pprint(email_list_parsed)
+    unparsed_bus_true = parent_results[10].findAll('div', class_="content-value")
+    bus_list_parsed = []
+    for elem in unparsed_bus_true:
+        bus_list_parsed.append(remove_line_break_and_concat(elem))
+    pp.pprint(bus_list_parsed)
+    #pp.pprint(address_list_parsed)
     #pp.pprint(unparsed_emails_true)
     parent_child_list = make_parent_child_list(parent_results)
     print(">>>>>>>>>>>>>>>")
