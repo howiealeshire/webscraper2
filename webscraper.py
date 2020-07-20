@@ -8,7 +8,10 @@ from fp.fp import FreeProxy
 import requests
 import time
 import xlsxwriter
+import xlrd
+import csv
 from fake_useragent import UserAgent
+import os
 
 class Person:
     def __init__(self,bus,name_searched,loc_searched,details_url,tps_name,tps_age,birth_date,
@@ -35,8 +38,8 @@ class Person:
 def get_names_and_locations(file_path):
     df = pd.read_excel(file_path)
     names_and_locs = list(zip(df.iloc[:, 0], df.iloc[:, 1]))
-    names_and_locs2 = [names_and_locs[0],names_and_locs[1],names_and_locs[2]]
-    return names_and_locs2
+    #names_and_locs2 = [names_and_locs[0],names_and_locs[1],names_and_locs[2],names_and_locs[3],names_and_locs[4],names_and_locs[5]]
+    return names_and_locs
 
 def gen_url(first_name, last_name, city, state):
     test_url = "https://www.truepeoplesearch.com/details?name=John%20Smith&citystatezip=Atlanta%2C%20GA&rid=0x0"
@@ -107,7 +110,7 @@ def get_html_from_page(video_url):
     #pp.pprint(data)
     soup = BeautifulSoup(data, 'html.parser')
 
-    time.sleep(10)
+    time.sleep(25) #to prevent captcha
 
     return soup
     #print(data)
@@ -190,11 +193,19 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
             name = results.find('span', class_="h2")
             name = remove_line_break_and_concat(name)
             results = remove_line_break_and_concat(results.find('span', class_="content-value"))
-            age_and_year = results.split()
-            age = age_and_year[1]
-            year = age_and_year[2] + " " + age_and_year[3]
-            year = year.replace("(", "")
-            year = year.replace(")", "")
+            if results is not None:
+                age_and_year = results.split()
+            if(len(age_and_year) > 0):
+                age = age_and_year[1]
+            else:
+                age = ['','']
+            if(len(age_and_year) > 3):
+                year = age_and_year[2] + " " + age_and_year[3]
+                year = year.replace("(", "")
+                year = year.replace(")", "")
+            else:
+                year = ''
+
         else:
             name = ''
             age = ''
@@ -202,8 +213,15 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
 
         return name,age,year
     def get_address(soup):
-        address_html = soup[0].find('a', class_="link-to-more olnk")
-        return remove_line_break_and_concat(address_html)
+        if soup is not None and len(soup) > 0:
+            address_html = soup[0].find('a', class_="link-to-more olnk")
+            if address_html is not None:
+                address_html = remove_line_break_and_concat(address_html)
+                return address_html
+            else:
+                return ''
+        else:
+            return ''
     def get_link_value(soup):
         html_doc = soup.findAll('a', class_="link-to-more olnk")
         num_list = []
@@ -223,9 +241,9 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
     def parse_bus(bus):
         l = []
         text_bus = bus.get_text()
-        pp.pprint("text bus")
-        pp.pprint(text_bus)
-        pp.pprint("</text bus>")
+        #pp.pprint("text bus")
+        #pp.pprint(text_bus)
+        #pp.pprint("</text bus>")
         #pp.pprint(bus.get_text())
         text_bus_trimmed = bus.get_text().split("\n")
         trimmed_l = []
@@ -233,15 +251,15 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
             for idx,elem in enumerate(text_bus_trimmed):
                 if elem.strip() != '':
                     trimmed_l.append(elem.strip())
-                    pp.pprint("text bus trimmed")
-                    pp.pprint(text_bus_trimmed[idx])
+                    #pp.pprint("text bus trimmed")
+                    #pp.pprint(text_bus_trimmed[idx])
         for elem in trimmed_l:
             l.append(elem)
         #l_to_add = text_bus_trimmed
         #pp.pprint(l)
-        pp.pprint("LLL")
-        pp.pprint(l)
-        pp.pprint("LLLLL")
+        #pp.pprint("LLL")
+        #pp.pprint(l)
+        #pp.pprint("LLLLL")
         return l
 
     def parse_vals_true(sub_soup,is_bus=False, get_dates=False):
@@ -255,19 +273,13 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
                 date = ''
                 if elem is not None:
                     date = elem.find('span', class_="content-label smaller")
-                    #pp.pprint("DATE?????")
-                    if date is not None:
-                        pp.pprint("DATE?????")
-                        pp.pprint(date.getText().strip())
-                        pp.pprint("YES")
                     if date is not None:
                         date_list.append(date.getText().strip())
                     else:
                         date_list.append('')
-                        #pp.pprint(remove_line_break_and_concat(date))
-                pp.pprint("email list parsed")
+                #pp.pprint("email list parsed")
                 email_list_parsed.append(remove_line_break_and_concat(elem))
-                pp.pprint(email_list_parsed)
+                #pp.pprint(email_list_parsed)
             else:
                 if elem is not None:
                     date = elem.find('span', class_="content-label smaller")
@@ -276,14 +288,14 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
                     else:
                         date_list.append('')
                     l_to_add = parse_bus(elem)
-                    pp.pprint("L to add")
-                    pp.pprint(l_to_add)
+                    #pp.pprint("L to add")
+                    #pp.pprint(l_to_add)
                     email_list_parsed.append(l_to_add)
                     #email_list_parsed.append(l_to_add)
         if get_dates == True:
-            pp.pprint("DATE LIST")
-            pp.pprint(date_list)
-            pp.pprint("END DATE LIST")
+            #pp.pprint("DATE LIST")
+            #pp.pprint(date_list)
+            #pp.pprint("END DATE LIST")
             return email_list_parsed,date_list
         else:
             return email_list_parsed
@@ -291,7 +303,7 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
         for idx, elem in enumerate(parent_soup):
             unparsed_emails_true = elem.find('div', class_="content-label h5")
             #pp.pprint(parent_soup[4].getText())
-            pp.pprint(unparsed_emails_true.getText())
+            #pp.pprint(unparsed_emails_true.getText())
             if(needle in unparsed_emails_true.getText()):
                 return idx
 
@@ -299,7 +311,7 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
 
     def parse_buses_true(sub_soup):
         unparsed_emails_true = sub_soup.findAll('div', class_="content-value")
-        pp.pprint(unparsed_emails_true)
+        #pp.pprint(unparsed_emails_true)
         email_list_parsed = []
         for elem in unparsed_emails_true:
             if elem is not None:
@@ -359,37 +371,40 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
 
     if parent_results is not None:
         idx = get_index_of_elem(parent_results,"Phone Numbers")
-        pp.pprint(idx)
+        #pp.pprint(idx)
         if idx is not -1:
-            unparsed_numbers = parent_results[idx]
+            parsed_numbers =  parse_vals_true(parent_results[idx],False,False)
         else:
-            unparsed_numbers = []
+            parsed_numbers = []
     else:
-        unparsed_numbers = []
+        parsed_numbers = []
 
     #pp.pprint(parsed_buses_true)
     curr_address = get_address(parent_results)
-    print("curr address:")
+    #print("curr address:")
    # pp.pprint(curr_address)
 
     #parent_child_list = make_parent_child_list(parent_results)
-    print(">>>>>>>>>>>>>>>")
+    #print(">>>>>>>>>>>>>>>")
 
 
 
 
 
 
-    print("????")
-    parsed_numbers = parse_values(unparsed_numbers)
+    #print("????")
+#    parsed_numbers = parse_values(unparsed_numbers)
     #pp.pprint(parsed_numbers)
 
-    print("fjdljlfldjflsjslj------------")
+    #print("fjdljlfldjflsjslj------------")
     bus_date = ''
-    print("parsed buses")
-    pp.pprint(parsed_buses_true)
-    print("close")
-    default_business = parsed_buses_true[0]
+    #print("parsed buses")
+    #pp.pprint(parsed_buses_true)
+    #print("close")
+    if parsed_buses_true is not None and len(parsed_buses_true) > 0:
+        default_business = ''.join(parsed_buses_true[0])
+    else:
+        default_business = ''
     p = Person(default_business,name_searched,loc_searched,url,name,age,year,curr_address,parsed_numbers
                           ,parsed_emails_true,parsed_addresses_true,parsed_buses_true,parsed_bus_dates_true,parsed_address_dates_true)
     return p
@@ -406,6 +421,8 @@ def get_all_html(urls):
     html_list = []
     for elem in urls:
         html_list.append(get_html_from_page(elem))
+        print("Got html from: " + str(elem))
+    print("Scraped all html.")
     return html_list
 
 def parse_all_html(htmls,names_and_locs,urls):
@@ -417,6 +434,7 @@ def parse_all_html(htmls,names_and_locs,urls):
         url = urls[idx]
         person = parse_html(html,name,loc,url)
         person_list.append(person)
+        print("Parsed:" + " " + str(person.bus) + "," + str(person.name_searched) + ", " + str(person.loc_searched))
     return person_list
 
 def write_to_excel_file(persons, workbook):
@@ -474,7 +492,7 @@ def write_to_excel_file(persons, workbook):
     row = 1
     col = 0
     for person in persons:
-        worksheet.write(row, col, person.bus[0])
+        worksheet.write(row, col, person.bus)
         worksheet.write(row, col + 1, person.name_searched)
         worksheet.write(row,col+2,person.loc_searched)
         worksheet.write(row,col+3,person.details_url)
@@ -497,26 +515,27 @@ def write_to_excel_file(persons, workbook):
         for idx,elem in enumerate(person.prev_addresses):
             worksheet.write(row,col+i,elem.split('(')[0])
             i += 1
-            print("prev address_Dates to write")
-            pp.pprint(person.prev_address_dates[idx])
-            print("end prev aaddress dates to write")
+            #print("prev address_Dates to write")
+            #pp.pprint(person.prev_address_dates[idx])
+            #print("end prev aaddress dates to write")
             worksheet.write(row,col+i,person.prev_address_dates[idx])
             i += 1
 
         col = 408
         i = 0
         for idx, elem in enumerate(person.possible_buses_and_addresses):
-            print("elem")
-            pp.pprint(elem)
-            print("</elem>")
-            worksheet.write(row, col + idx, elem[0])
-            worksheet.write(row,col+idx+1,elem[1])
-            if(len(person.bus_dates) > idx):
-                pp.pprint("DATES")
-                pp.pprint(person.bus_dates)
-                pp.pprint("ENDDATES")
-                worksheet.write(row,col+idx+2,person.bus_dates[idx])#person.bus_dates[idx])
-            i = idx
+            #print("elem")
+            #pp.pprint(elem)
+            #print("</elem>")
+            worksheet.write(row, col + i, elem[0])
+            i += 1
+            worksheet.write(row,col+i,elem[1])
+            i += 1
+            #pp.pprint("DATES")
+            #pp.pprint(person.bus_dates)
+            #pp.pprint("ENDDATES")
+            worksheet.write(row,col+i,person.bus_dates[idx])#person.bus_dates[idx])
+            i += 1
 
         col = 708
         i = 0
@@ -524,24 +543,47 @@ def write_to_excel_file(persons, workbook):
         col = 0
     workbook.close()
 
+def csv_from_excel(workbook_path,csv_output_file_path):
+    wb = xlrd.open_workbook(workbook_path)
+    sh = wb.sheet_by_name('Sheet1')
+    your_csv_file = open(csv_output_file_path, 'w')
+    wr = csv.writer(your_csv_file, quoting=csv.QUOTE_ALL)
+
+    for rownum in range(sh.nrows):
+        wr.writerow(sh.row_values(rownum))
+
+    your_csv_file.close()
 
 if __name__ == '__main__':
+    #csv_from_excel('/Users/howie/Desktop/scraped_data.xlsx','tps_extracted_data.csv')
+
     pp = pprint.PrettyPrinter(indent=4)
-    names_and_locs = get_names_and_locations("/Users/howie/Downloads/RA_List.xlsx")
-    pp.pprint(names_and_locs)
+    names_and_locs = get_names_and_locations("RA_List.xlsx")
+    #pp.pprint(names_and_locs)
     param_list = gen_param_list_for_urls(names_and_locs)
-    pp.pprint(param_list)
+    #pp.pprint(param_list)
     urls = gen_all_urls(param_list)
-    #htmls = get_all_html(urls)
-    htmls = BeautifulSoup(open("html_sample.html"), "html.parser")
-    persons = [parse_html(htmls)]#names_and_locs,urls)
+    htmls = get_all_html(urls)
+    #htmls = BeautifulSoup(open("html_sample.html"), "html.parser")
+    persons = parse_all_html(htmls,names_and_locs,urls)
 
     #person = parse_html(htmls)
     #persons = []
     #persons.append(person)
 
-    workbook = xlsxwriter.Workbook('/Users/howie/Desktop/scraped_data.xlsx')
+    workbook = xlsxwriter.Workbook('scraped_data.xlsx')
+    print("Writing to files...")
     write_to_excel_file(persons,workbook)
+    
+    
+    
+
+    csv_from_excel('scraped_data.xlsx', 'scraped_data.csv')
+    os.remove("scraped_data.xlsx")
+    print("Finished.")
+
+    #os.remove("scraped_data.xlsx") --Enable at end.
+
     #for elem in persons:
      #   pp.pprint(str(elem))
     #with open('your_file.txt', 'w') as f:
