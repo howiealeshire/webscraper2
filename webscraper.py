@@ -11,11 +11,23 @@ import xlsxwriter
 import xlrd
 import csv
 from fake_useragent import UserAgent
-import os
+from os import listdir
+from os.path import isfile, join,basename,dirname, exists
+from os import rename,remove
+from os import stat
+import random
+import math
+import pickle
+import dill
+from datetime import datetime
+from itertools import groupby
+from collections import OrderedDict
+
+GLOBAL_COUNTER = 0
 
 class Person:
     def __init__(self,bus,name_searched,loc_searched,details_url,tps_name,tps_age,birth_date,
-                 curr_address,phone_nums,email_addresses,prev_addresses,possible_buses_and_addresses,bus_dates,prev_address_dates):
+                 curr_address,phone_nums,email_addresses,prev_addresses,possible_buses_and_addresses,bus_dates,prev_address_dates,file_name=''):
         self.bus = bus
         self.name_searched = name_searched
         self.loc_searched = loc_searched
@@ -30,10 +42,27 @@ class Person:
         self.possible_buses_and_addresses = possible_buses_and_addresses
         self.bus_dates = bus_dates
         self.prev_address_dates = prev_address_dates
+        self.file_name = file_name
 
     def __str__(self):
         separator = ","
         return self.bus + "," + self.name_searched + "," + self.loc_searched + "," + self.details_url + "," + self.tps_name + "," + self.tps_age +  "," + self.birth_date + "," + self.curr_address  + "," + separator.join(self.phone_nums) + "," + separator.join(self.email_addresses)  + "," + separator.join(self.prev_addresses) + "," + separator.join(self.possible_buses_and_addresses)
+
+class UrlField:
+    def __init__(self,first_name,last_name,city,state):
+        self.first_name = first_name
+        self.last_name = last_name
+        self.city = city
+        self.state = state
+    def __str__(self):
+        return self.first_name + "," + self.last_name + "," + self.city + "," + self.state
+    def __eq__(self, other):
+        if isinstance(other, UrlField):
+            if self.first_name == other.first_name and self.last_name == other.last_name and self.city == other.city and self.state == other.state:
+                return True
+            else:
+                return False
+
 
 def get_names_and_locations(file_path):
     df = pd.read_excel(file_path)
@@ -41,18 +70,176 @@ def get_names_and_locations(file_path):
     #names_and_locs2 = [names_and_locs[0],names_and_locs[1],names_and_locs[2],names_and_locs[3],names_and_locs[4],names_and_locs[5]]
     return names_and_locs
 
-def gen_url(first_name, last_name, city, state):
+def get_supposed_url_from_file_num(file_num):
+    f = open(your_file.txt, 'r')
+    lines = f.readlines()
+    if(file_num < len(lines)):
+        return lines[file_num]
+    else:
+        return None
+
+
+
+
+
+
+def gen_url(first_name, last_name, city, state, rid="0x0"):
     test_url = "https://www.truepeoplesearch.com/details?name=John%20Smith&citystatezip=Atlanta%2C%20GA&rid=0x0"
-    template_url = "https://www.truepeoplesearch.com/details?name=" + first_name + "%20" + last_name + "&citystatezip=" + city + "%2C%20" + state +  "&rid=0x0"
+    template_url = "https://www.truepeoplesearch.com/details?name=" + first_name + "%20" + last_name + "&citystatezip=" + city + "%2C%20" + state +  "&rid=" + rid
     return template_url
+
+def gen_all_urls_for_one_person(first_name, last_name, city, state, rid_list):
+    url_list = []
+    for rid in rid_list:
+        url_list.append("https://www.truepeoplesearch.com/details?name=" + first_name + "%20" + last_name + "&citystatezip=" + city + "%2C%20" + state +  "&rid=" + rid)
+    return url_list
+
+def gen_url_for_num_found(first_name, last_name, city, state):
+    template_url = "https://www.truepeoplesearch.com/results?name="+ first_name +"%20" + last_name + "&citystatezip=" + city +  ",%20" + state
+    return template_url
+
+def gen_all_urls_for_num_found(names_and_locs):
+    url_list = []
+    for elem in names_and_locs:
+        url = gen_url_for_num_found(elem[0], elem[1], elem[2], elem[3])
+        url_list.append(url)
+    return url_list
+
+
+def empty_result_detected(soup):
+    soup.body.findAll(text=re.compile('^We could not find any records for that search criteria.$'))
+    pass
+
+def get_num_results(soup):
+    parent_results = soup.find('div', class_="col-10 mt-1")
+    if parent_results is not None:
+        text = str(parent_results.getText()).strip().split()[0]
+        if text is not None:
+            if text.isnumeric():
+                return int(text)
+
+    else:
+        return -1
+
+
+
+def get_all_num_pages(num_result_list):
+    all_num_pages = []
+    for elem in num_result_list:
+        all_num_pages.append(get_num_pages(elem))
+    return all_num_pages
+
+
+
+def get_num_pages(num_results):
+    num_per_page = 10
+    num_pages = num_results / num_per_page
+    if(num_pages.is_integer()):
+        return num_pages
+    else:
+        return math.ceil(num_pages)
+
+def get_all_rids(num_pages_list):
+    rid_list = []
+    for elem in num_pages_list:
+        rid_list.append(get_rids(elem))
+    return rid_list
+
+def get_rids3(num_records,num_pages):
+    temp_num_records = num_records
+    rid_list = []
+    i = 0
+    page_num = 0
+    if (num_records < 10):
+        small_record_num = 0
+        while small_record_num < num_records:
+            rid_list.append("0" + "x" + str(small_record_num))
+            small_record_num += 1
+        return rid_list
+    else:
+        while page_num < num_pages:
+            while i < 10:
+                if page_num == 0:
+                    rid_list.append('0' + "x" + str(i))
+                else:
+                    rid_list.append(str(page_num) + '0' + "x" + str(i))
+                i += 1
+            i = 0
+            page_num += 1
+    return rid_list
+
+
+def get_rids2(num_records,num_pages):
+    temp_num_records = num_records
+    rid_list = []
+    i = 0
+    page_num = 0
+
+    if (num_records < 10):
+        small_record_num = 0
+        while small_record_num < num_records:
+            rid_list.append("0" + "x" + str(small_record_num))
+            small_record_num += 1
+        return rid_list
+    else:
+        num_record_count = 0
+        while page_num < num_pages and num_record_count < num_records:
+            while i < 10:
+                if page_num == 0:
+                    rid_list.append('0' + "x" + str(i))
+                else:
+                    if(int(str(page_num) + str(i)) < num_records):
+                        rid_list.append(str(page_num) + '0' + "x" + str(i))
+                num_record_count += 1
+                i += 1
+            i = 0
+            page_num += 1
+    return rid_list
+
+def get_all_rids2(num_records_list,num_pages_list):
+    all_rids_list = []
+    for num_records, num_pages in zip(num_records_list,num_pages_list):
+        all_rids_list.append(get_rids2(num_records,num_pages))
+    return all_rids_list
+
+
+def get_rids(num_pages):
+    rid_list = []
+    i = 0
+    page_num = 0
+    if(num_pages < 10):
+        small_page_num = 0
+        while small_page_num < num_pages:
+            rid_list.append(str(page_num) + "x" + str(i))
+            small_page_num += 1
+        return rid_list
+
+
+    while page_num < num_pages:
+        while i < 10:
+            rid_list.append(str(page_num) + "x" + str(i))
+            i += 1
+        i = 0
+        page_num += 1
+    return rid_list
+
+
+def google_captcha_detected(soup):
+    parent_results = soup.findAll('div', class_="g-recaptcha")
+    if(len(parent_results) > 0):
+        return True
+    else:
+        return False
+
 
 def gen_all_urls(names_and_locs):
     url_list = []
-
     for elem in names_and_locs:
         url = gen_url(elem[0],elem[1],elem[2],elem[3])
         url_list.append(url)
     return url_list
+
+
 
 def gen_param_list_for_urls(names_and_locs):
     gen_list = []
@@ -66,8 +253,44 @@ def gen_param_list_for_urls(names_and_locs):
         gen_list.append(elem_to_add)
     return gen_list
 
-def get_html_from_page(video_url):
+def get_file_num(file_path):
+    last_file_name = basename(file_path)
+    last_file_name = last_file_name[4:]
+    last_file_name = last_file_name.split('.', 1)[0]
+    file_num = int(last_file_name)
+    return file_num
 
+def get_latest_file_number(file_list):
+    num_list = []
+    for elem in file_list:
+        num_list.append((get_file_num(elem)))
+    return max(num_list)
+
+def get_latest_file_path(file_list):
+    latest_num = get_latest_file_path(file_list)
+    for elem in file_list:
+        temp_num = get_latest_file_number(elem)
+        if temp_num == latest_num:
+            return elem
+
+
+
+
+
+
+
+def get_html_from_page(video_url, num_tries=0):
+    global GLOBAL_COUNTER
+    GLOBAL_COUNTER += 1
+    if(GLOBAL_COUNTER == 100):
+        print("Begin waiting")
+        now = datetime.now()
+        current_time = now.strftime("%H:%M:%S")
+        print("Current Time =", current_time)
+        interval = random.randrange(5,9)
+        print("Waiting " + str(interval) + " minutes.")
+        time.sleep(60 * interval)
+        GLOBAL_COUNTER = 0
     #user_agent = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.9.0.7) Gecko/2009021910 Firefox/3.0.7'
     #user_agent = 'your bot 0.2222'
     #headers = {'User-Agent': user_agent, }
@@ -97,9 +320,12 @@ def get_html_from_page(video_url):
     #req.add_header('User-Agent', user_agent)
     #page = urllib.request.urlopen(req)
 
+
     ua = UserAgent()
     headers = {
         'User-Agent': ua.random}
+    time.sleep(random.randrange(6,11)) #to prevent captcha
+
     result = requests.get(video_url, headers=headers)
     #"http://webcache.googleusercontent.com/search?q=cache:"
     #pp.pprint(page.info())
@@ -107,10 +333,43 @@ def get_html_from_page(video_url):
     #response = urllib.request.urlopen(request)
 
     data = result.text  # The data u need
-    #pp.pprint(data)
-    soup = BeautifulSoup(data, 'html.parser')
+    cloud_soup = BeautifulSoup(data, 'html.parser')
+    if cloud_fare_denial_detected(cloud_soup):
+        print("Cloud fare protection detected! Aborting before writing bad value to file.")
+        print("Guilty URL: " + video_url)
+        input("Press Enter to Exit")
+    print("Still safe.")
+    mypath = "/Users/howie/PycharmProjects/webscraper/venv/html_folder"
+    onlyfiles = [f for f in listdir(mypath) if isfile(join(mypath, f))]
 
-    time.sleep(25) #to prevent captcha
+    #file_path = ""
+    if(len(onlyfiles) == 0):
+        file_path = join(mypath,"html0.html")
+        print(str(file_path))
+        f = open(file_path, "w")
+        f.write(data)
+        f.close()
+    else:
+        file_num = get_latest_file_number(onlyfiles)
+        file_path_num = file_num + 1
+        file_path_name = "html" + str(file_path_num) + ".html"
+        file_path = join(mypath,file_path_name)
+        if(file_path in onlyfiles):
+            if(stat(file_path).st_size != 0):
+                file_path_num = file_num + 2
+                file_path_name = "html" + str(file_path_num) + ".html"
+                file_path = join(mypath, file_path_name)
+
+        f = open(file_path, "w")
+        f.write(data)
+        f.close()
+
+
+    #pp.pprint(data)
+    soup = BeautifulSoup(open(file_path),"html.parser")
+    #soup = BeautifulSoup(data, 'html.parser')
+
+
 
     return soup
     #print(data)
@@ -124,7 +383,15 @@ def get_html_from_page(video_url):
     #print(soup.prettify())
 
 
-def parse_html(soup,name_searched='',loc_searched='',url=''):
+
+
+def parse_html(soup,name_searched='',loc_searched='',url='',reproduce_url=False):
+
+    def reproduce_url(soup):
+        name,age,yearget_name_age_and_year(soup)
+
+
+
     pp = pprint.PrettyPrinter(indent=4)
     """
       address = get_address(parent_results)
@@ -152,17 +419,8 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
       #print(results.prettify())
       """
     #soup = BeautifulSoup(html, "html.parser")
+    #pp.pprint(soup)
     parent_results = soup.findAll('div', class_="col-12 col-sm-11")
-    def make_parent_child_list(parent_soup):
-        result_list = []
-        intermediate_list = []
-        for parent in parent_soup:
-            # intermediate_list.append(parent)
-            for child in parent.children:
-                intermediate_list.append(child)
-            result_list.append(intermediate_list)
-            intermediate_list = []
-        return result_list
     #accepts html
     def remove_line_break_and_concat(html_elem):
         html_elem = str.split(html_elem.get_text())
@@ -173,20 +431,6 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
             parsed_text_full += elem + " "
         parsed_text_full = parsed_text_full.strip()
         return parsed_text_full
-    def get_value_title(soup, title):
-        x = soup.find(text=re.compile(title))
-        #pp.pprint(x.parent.parent.parent.parent.children)
-        return x.parent.parent.parent.parent.children
-
-
-        #for elem in soup:
-            #pp.pprint(elem)
-
-        #soup = soup.find('div', class_="content-label h5")
-        #soup2 = BeautifulSoup(open("html_sample.html"), "html.parser")
-        #soup2 = soup2.find('div', class_="content-label h5")
-
-        #pp.pprint(soup2)
     def get_name_age_and_year(original_soup):
         results = original_soup.find('div', class_="row pl-md-2")
         if results is not None:
@@ -309,17 +553,6 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
 
         return -1
 
-    def parse_buses_true(sub_soup):
-        unparsed_emails_true = sub_soup.findAll('div', class_="content-value")
-        #pp.pprint(unparsed_emails_true)
-        email_list_parsed = []
-        for elem in unparsed_emails_true:
-            if elem is not None:
-                l_to_add = parse_bus(elem)
-                for item in l_to_add:
-                    email_list_parsed.append(item)
-
-        return email_list_parsed
 
     name,age,year = get_name_age_and_year(soup)
 
@@ -401,6 +634,27 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
     #print("parsed buses")
     #pp.pprint(parsed_buses_true)
     #print("close")
+    if name_searched == '':
+        if(name == ''):
+            name,age,year = get_name_age_and_year(soup)
+        print("name")
+        print(name)
+        if name != '':
+            name_searched2 = name.split()
+            if(len(name_searched2) > 2):
+                name_searched = name_searched2[0] + " " + name_searched2[2]
+            elif(len(name_searched2) == 2):
+                name_searched = name_searched2[0] + " " + name_searched2[1]
+            else:
+                name_searched = ''
+        else:
+            name_searched = ''
+    if loc_searched == '' and name_searched != '':
+        names_and_locs = get_names_and_locations("RA_List.xlsx")
+        for elem in names_and_locs:
+            name2 = elem[0]
+            if name_searched in name2:
+                loc_searched = elem[1]
     if parsed_buses_true is not None and len(parsed_buses_true) > 0:
         default_business = ''.join(parsed_buses_true[0])
     else:
@@ -416,25 +670,112 @@ def parse_html(soup,name_searched='',loc_searched='',url=''):
 def main():
     pass
 
+def get_all_html_for_one_searched_person(urls):
+    url_list = []
+    for elem in name:
+        url = gen_url(elem[0], elem[1], elem[2], elem[3], get_all_rids(25))
+        url_list.append(url)
+    return url_list
 
 def get_all_html(urls):
     html_list = []
+    f = open('/Users/howie/PycharmProjects/webscraper/venv/html_lists.p','ab')
     for elem in urls:
-        html_list.append(get_html_from_page(elem))
-        print("Got html from: " + str(elem))
+        soup = get_html_from_page(elem)
+        captcha_detected = google_captcha_detected(soup)
+        if(captcha_detected is False):
+            empty_result = empty_result_detected(soup)
+            if empty_result is True:
+                break
+        if(captcha_detected is False):
+            html_list.append(soup)
+
+            print("Got html from: " + str(elem))
+        else:
+            input("Google reCaptcha detected. Please navigate to current URL and solve captcha. Press Enter when "
+                  "finished.")
+            i = 0
+            while(i < 3 and captcha_detected == True):
+                soup2 = get_html_from_page(elem)
+                captcha_detected = google_captcha_detected(soup2)
+                if(captcha_detected is False):
+                    html_list.append(soup)
+                    print("Got html from: " + str(elem))
+                    i = 4
+                    break
+                i += 1
+
     print("Scraped all html.")
+    #dill.dump(html_list,f)
     return html_list
 
-def parse_all_html(htmls,names_and_locs,urls):
+def grab_all_html_from_files():
+    mypath = "/Users/howie/PycharmProjects/webscraper/venv/html_folder"
+    onlyfiles = [f for f in listdir(mypath) if isfile(join(mypath, f))]
+    htmls = []
+    bad_htmls_and_urls = []
+    for elem in onlyfiles:
+        full_path = join(mypath,elem)
+        html = BeautifulSoup(open(full_path), "html.parser")
+        if detect_no_results_found(html) is False and google_captcha_detected(html) is False:
+            htmls.append(html)
+        #else:
+         #   print("Guilty file: " + full_path)
+            #file_num = get_file_num(full_path)
+            #url = get_supposed_url_from_file_num(file_num)
+            #bad_htmls_and_urls.append((full_path,url))
+
+    print("len htmls")
+    print(len(htmls))
+
+    return htmls
+
+
+def detect_no_results_found(soup):
+    results = soup.body.findAll(text=re.compile('^We could not find any records for that search criteria.$'))
+    if(len(results) > 0):
+        return True
+    else:
+        return False
+
+def parse_all_html2(htmls,reproduce_url=False):
     person_list = []
+    f = open('/Users/howie/PycharmProjects/webscraper/venv/persons3.p', 'ab')
+
+    for idx, html in enumerate(htmls):
+        if (html != '\n' and html != 'html'):
+            url = ''
+            if reproduce_url is True:
+                person = parse_html(html,'','','',True)
+            else:
+                person = parse_html(html)
+        else:
+            person = Person('', '', '', '', '', '', '', '', '', '', '', '', '', '')
+        pickle.dump(person, f)
+        person_list.append(person)
+        print("Parsed:" + " " + str(person.bus) + "," + str(person.name_searched) + ", " + str(person.loc_searched))
+    f.close()
+    return person_list
+
+
+
+def parse_all_html(htmls,names_and_locs,urls):
+
+    person_list = []
+    f = open('/Users/howie/PycharmProjects/webscraper/venv/persons3.p','ab')
     for idx,html in enumerate(htmls):
-        name_and_loc = names_and_locs[idx]
+        name_and_loc = names_and_locs
         name = name_and_loc[0]
         loc = name_and_loc[1]
         url = urls[idx]
-        person = parse_html(html,name,loc,url)
+        if(html != '\n' and html != 'html'):
+            person = parse_html(html,name,loc,url)
+        else:
+            person = Person('','','','','','','','','','','','','','')
+        pickle.dump(person,f)
         person_list.append(person)
         print("Parsed:" + " " + str(person.bus) + "," + str(person.name_searched) + ", " + str(person.loc_searched))
+    f.close()
     return person_list
 
 def write_to_excel_file(persons, workbook):
@@ -554,53 +895,459 @@ def csv_from_excel(workbook_path,csv_output_file_path):
 
     your_csv_file.close()
 
-if __name__ == '__main__':
-    #csv_from_excel('/Users/howie/Desktop/scraped_data.xlsx','tps_extracted_data.csv')
 
+def pair_names_locs_and_rid_list(names_and_locs,rid_lists):
+    pair_list = []
+    for rid_list,name_and_loc in zip(rid_lists,names_and_locs):
+        pair_list.append([name_and_loc,rid_list])
+    return pair_list
+
+def gen_all_urls_for_all_pages(names_and_locs,rid_lists):
+    pp = pprint.PrettyPrinter(indent=4)
+    url_list = []
+    pair_list = pair_names_locs_and_rid_list(names_and_locs,rid_lists)
+    #pp.pprint(pair_list)
+    for pair in pair_list:
+        elem = pair[0]
+        #print('elem')
+        #pp.pprint(elem)
+        rid_list = pair[1]
+        for rid in rid_list:
+
+            url = gen_url(elem[0], elem[1], elem[2], elem[3], rid)
+            url_list.append(url)
+    """
+    for elem in names_and_locs:
+        url = ''
+        url = gen_url(elem[0], elem[1], elem[2], elem[3],rid)
+        url_list.append(url)
+    return url_list
+    """
+    return url_list
+
+def actual_main():
     pp = pprint.PrettyPrinter(indent=4)
     names_and_locs = get_names_and_locations("RA_List.xlsx")
-    #pp.pprint(names_and_locs)
+    # pp.pprint(names_and_locs)
     param_list = gen_param_list_for_urls(names_and_locs)
-    #pp.pprint(param_list)
+    # pp.pprint(param_list)
     urls = gen_all_urls(param_list)
     htmls = get_all_html(urls)
-    #htmls = BeautifulSoup(open("html_sample.html"), "html.parser")
-    persons = parse_all_html(htmls,names_and_locs,urls)
+    # htmls = BeautifulSoup(open("html_sample.html"), "html.parser")
+    persons = parse_all_html(htmls, names_and_locs, urls)
 
-    #person = parse_html(htmls)
-    #persons = []
-    #persons.append(person)
+    # person = parse_html(htmls)
+    # persons = []
+    # persons.append(person)
 
     workbook = xlsxwriter.Workbook('scraped_data.xlsx')
     print("Writing to files...")
-    write_to_excel_file(persons,workbook)
-    
-    
-    
+    write_to_excel_file(persons, workbook)
 
     csv_from_excel('scraped_data.xlsx', 'scraped_data.csv')
-    os.remove("scraped_data.xlsx")
+    #remove("scraped_data.xlsx")
     print("Finished.")
 
-    #os.remove("scraped_data.xlsx") --Enable at end.
+    # os.remove("scraped_data.xlsx") --Enable at end.
 
-    #for elem in persons:
-     #   pp.pprint(str(elem))
-    #with open('your_file.txt', 'w') as f:
-     #   for item in persons:
-      #      f.write("%s\n" % str(item))
+    # for elem in persons:
+    #   pp.pprint(str(elem))
+    # with open('your_file.txt', 'w') as f:
+    #   for item in persons:
+    #      f.write("%s\n" % str(item))
+    # pp.pprint(x)
+
+    # f = open("demofile2.txt", "a")
+    # f.write("Now the file has more content!")
+    # f.close()
+    # get_html_from_page("")
+    # parse_html("")
+
+def get_all_num_records(htmls_with_nums):
+    num_record_list = []
+    for elem in htmls_with_nums:
+        num_record_list.append(get_num_results(elem))
+    return num_record_list
+
+def group_all_urls_by_person(name_and_loc_list,url_list):
+    grouped_urls = []
+    for elem in name_and_loc_list:
+        first_name = elem[0]
+        last_name = elem[1]
+        city = elem[2]
+        state = elem[3]
+        this_person_url_list = []
+        for url in url_list:
+            if first_name in url and last_name in url and city in url and state in url:
+                this_person_url_list.append(url)
+        grouped_urls.append(this_person_url_list)
+    return grouped_urls
+
+def group_all_files_by_person(name_and_loc_list,file_list):
+    grouped_urls = []
+    for elem in name_and_loc_list:
+        first_name = elem[0]
+        last_name = elem[1]
+        city = elem[2]
+        state = elem[3]
+        this_person_url_list = []
+        person_list = parse_all_html2(file_list)
+        for person in person_list:
+            if first_name in person.first_name and last_name in person.last_name and city in person.city and state in person.state:
+                this_person_url_list.append(person.details_url)
+        grouped_urls.append(this_person_url_list)
+
+    return grouped_urls
+
+def reproduce_all_urls_from_files(files):
+    url_and_file_list = []
+    person_list = parse_all_html2(file_list)
+
+    parse_only_url_fields_from_file()
+    return url_and_file_list
+
+def flatten_list(l):
+    flat_list = []
+    for sublist in l:
+        for item in sublist:
+            flat_list.append(item)
+    return flat_list
+
+def cloud_fare_denial_detected(soup):
+    cloud_fare_title = soup.find('title')
+    if cloud_fare_title.getText is not None and len(cloud_fare_title) > 0:
+        if("Access denied | www.truepeoplesearch.com used Cloudflare to restrict access" in cloud_fare_title):
+            return True
+        else:
+            return False
+
+
+
+def sort_files_shift_nums_and_delete_cloud_fare(file_path_list):
+    pp = pprint.PrettyPrinter(indent=4)
+    mypath = "/Users/howie/PycharmProjects/webscraper/venv/html_folder"
+    def detect_in_all_cloudfare(file_path_list,mypath):
+        bad_list = []
+        for elem in file_path_list:
+            soup = BeautifulSoup(open(join(mypath, elem)), "html.parser")
+            cloud_fare = cloud_fare_denial_detected(soup)
+            if cloud_fare:
+                 bad_list.append(join(mypath, elem))
+        return bad_list
+
+    def delete_items_from_og_list(og_list,bad_list):
+        #good_list = []
+        for elem in bad_list:
+            if elem in og_list:
+                og_list.remove(elem)
+        return og_list
+    def delete_bad_files_from_directory(bad_list):
+        for elem in bad_list:
+            if exists(elem):
+                remove(elem)
+            else:
+                print("The file does not exist")
+
+
+    def sort_remaining_files_by_ascending2(og_list):
+        nums_at_start = []
+        num_and_file_list = []
+        for elem in og_list:
+            file_num = get_file_num(elem)
+            num_and_file_list.append((file_num, elem))
+            #num_and_file_list.append(file_num)
+            temp_elem = str(get_file_num(elem)) + elem
+            nums_at_start.append(temp_elem)
+            #print(temp_elem)
+        num_and_file_list.sort(key=lambda x: x[0])
+        pp.pprint(num_and_file_list)
+        y = []
+        for elem in num_and_file_list:
+            y.append(elem[1])
+        return y
+
+
+    def sort_remaining_files_by_ascending(og_list):
+        sorted_list = []
+        num_list = []
+        num_and_file_list = []
+        for elem in og_list:
+            file_num = get_file_num(elem)
+            num_and_file_list.append((file_num,elem))
+            num_list.append(file_num)
+
+        pp.pprint(num_and_file_list)
+        num_list.sort()
+        print("fjdfjfjfjf")
+        pp.pprint(num_list)
+        print("jfjfjfjfjf")
+        sorted_list = num_list
+
+        for elem in num_list:
+            for item in og_list:
+                str_elem = str(elem)
+                if str_elem in item:
+                    print(elem)
+                    #print(item)
+                    if item not in sorted_list and str_elem.isnumeric():
+                        sorted_list[elem] = item
+        return sorted_list
+    def reassign_numbers(dir_path,file_path_list):
+
+        reassigned_list = []
+        for idx,elem in enumerate(file_path_list):
+            base_name = basename(elem)
+            dir_name = dir_path
+            base_name = "html" + str(idx) + ".html"
+            #new_dir_path = join(dir_name)
+            reassigned_list.append(join(dir_name,base_name))
+        file_path_list2 = []
+        for elem in file_path_list:
+            file_path_list2.append(join(dir_path,elem))
+        assigned_list = list(zip(file_path_list2,reassigned_list))
+        for elem in assigned_list:
+            rename(elem[0],elem[1])
+        pp.pprint(assigned_list)
+        return reassigned_list
+
+    #bad_list = detect_in_all_cloudfare(file_path_list,mypath)
+    #pp.pprint(bad_list)
+    #delete_bad_files_from_directory(bad_list)
+    #pp.pprint(bad_list)
+    sorted_list = sort_remaining_files_by_ascending2(file_path_list)
+    #x = reassign_numbers(mypath,sorted_list)
+    #pp.pprint(x)
+    #x = sorted(sorted_list, key=lambda x: x[:4])
     #pp.pprint(x)
 
-    #f = open("demofile2.txt", "a")
-    #f.write("Now the file has more content!")
-    #f.close()
-    #get_html_from_page("")
-    #parse_html("")
+
+
+def grab_fields_from_url(url):
+    split_by_percent = url.split('%')
+    eq_sign_index = split_by_percent[0].find("name=")
+    start_of_name = eq_sign_index + len("name=")
+    first_name = split_by_percent[0]
+
+    pass
+
+def parse_only_url_fields_from_file(file,names_and_locs):
+    soup = BeautifulSoup(open(file, "html.parser"))
+    pass
+
+def test_main():
+
+    pp = pprint.PrettyPrinter(indent=4)
+
+    names_and_locs = get_names_and_locations("RA_List.xlsx")
+    pp.pprint(names_and_locs)
+    param_list = gen_param_list_for_urls(names_and_locs)
+    pp.pprint(param_list)
+    urls_for_num_found = gen_all_urls_for_num_found(param_list)
 
 
 
 
-   # print("hello")
+    """
+    print('1')
+    pp.pprint(urls_for_num_found)
+    htmls_with_nums = get_all_html(urls_for_num_found)
+    print('2')
+    pp.pprint(htmls_with_nums)
+    all_num_results = get_all_num_records(htmls_with_nums)
+    print('3')
+    pp.pprint(all_num_results)
+    all_num_pages = get_all_num_pages(all_num_results)
+    print('4')
+    pp.pprint(all_num_pages)
+    all_rids = get_all_rids2(all_num_results, all_num_pages)
+    print('5')
+    pp.pprint(all_rids)
+
+    detail_urls = gen_all_urls_for_all_pages(param_list, all_rids)
+    print('6')
+    pp.pprint(detail_urls)
+
+    #urls = gen_all_urls(param_list)
+    """
+    """
+   
+  
+    #urls = gen_all_urls(param_list)
+   
+   
+    """
+
+    """
+    with open('your_file.txt', 'w') as f:
+        for item in detail_urls:
+            f.write("%s\n" % str(item))
+    """
+    with open("/Users/howie/PycharmProjects/webscraper/venv/your_file.txt") as f:
+        content = f.readlines()
+    # you may also want to remove whitespace characters like `\n` at the end of each line
+    content = [x.strip() for x in content]
+    top100 = content
+
+    #if we parse the fields from this, we can get the remaining ones
+    grouped_urls = group_all_urls_by_person(param_list,top100)
+    pp.pprint(grouped_urls)
+
+    mypath = "/Users/howie/PycharmProjects/webscraper/venv/html_folder"
+    onlyfiles = [f for f in listdir(mypath) if isfile(join(mypath, f))]
+
+    """
+    full_path_list = []
+    for file in onlyfiles:
+        full_path_list.append(join(mypath,file))
+    """
+    """
+    reproduced_urls = []
+    for elem in full_path_list:
+        url = reproduce_url_from_file(file)
+        reproduced_urls.append(url)
+    """
+
+
+
+
+    """
+    all_html_list = []
+    for elem in grouped_urls:
+        pp.pprint("URL sublist: ")
+        pp.pprint(elem)
+        htmls = get_all_html(elem)
+        all_html_list.append(htmls)
+    """
+    #print("grouped files by person")
+    #pp.pprint(group_all_files_by_person(names_and_locs,full_path_list))
+    #print("end grouped_files_by_person")
+    persons_list = []
+    all_html_list = grab_all_html_from_files()
+    persons = parse_all_html2(all_html_list)
+    test_dict = {}
+    for elem in persons:
+        if elem.name_searched not in test_dict.keys():
+            test_dict[elem.name_searched] = [elem]
+
+        else:
+            test_dict[elem.name_searched].append(elem)
+
+    flattened_grouped_people_list = []
+    grouped_names = []
+    for elem in test_dict.values():
+        grouped_names.append(elem)
+        for item in elem:
+            flattened_grouped_people_list.append(item)
+
+    just_names = []
+    for elem in names_and_locs:
+        name = elem[0]
+        just_names.append(name)
+
+    ordered_keys_and_vals = []
+    for idx,name in enumerate(just_names):
+        if name in test_dict.keys():
+            ordered_keys_and_vals.append(test_dict[name])
+
+    ordered_final_people = []
+    for elem in ordered_keys_and_vals:
+        for item in elem:
+            ordered_final_people.append(item)
+
+
+
+
+
+
+    print("test dict")
+    pp.pprint(test_dict)
+    print("end test dict")
+    print("persons len")
+    print(len(persons))
+    print("persons begin")
+    pp.pprint(persons)
+    pp.pprint("End persons")
+
+    """
+    for elem in zip(names_and_locs,all_html_list):
+        #pp.pprint(elem[1])
+        persons = parse_all_html(elem[1], elem[0], top100)
+        persons_list.append(persons)
+    """
+    #persons = flatten_list(persons_list)
+    #pp.pprint("Persons")
+    #print(len(persons))
+    #pp.pprint(persons)
+    #pp.pprint("End persons")
+    #print("6.1")
+    #pp.pprint(content)
+
+    #htmls = get_all_html(content)
+    # htmls = BeautifulSoup(open("html_sample.html"), "html.parser")
+    #persons = parse_all_html(htmls, names_and_locs, content)
+
+    # person = parse_html(htmls)
+    # persons = []
+    # persons.append(person)
+
+    grouped_persons =  groupby(persons, lambda a: (a.name_searched))
+    pp.pprint(grouped_persons)
+    for elem in grouped_persons:
+        for item in elem:
+            print(item)
+        #print(elem.name_searched)
+
+    grouped_persons = flatten_list(grouped_persons)
+
+    workbook = xlsxwriter.Workbook('scraped_data.xlsx')
+    print("Writing to files...")
+    write_to_excel_file(ordered_final_people, workbook)
+
+    csv_from_excel('scraped_data.xlsx', 'scraped_data.csv')
+
+    print("Finished.")
+    #soup = BeautifulSoup(open("/Users/howie/PycharmProjects/webscraper/venv/html_num_records_sample.html"), "html.parser")
+    #soup_list = [soup]
+    #all_num_results = get_all_num_records(soup_list)
+    #print('3')
+    #pp.pprint(all_num_results)
+
+    """
+    
+    """
+
+    """
+    all_num_pages = get_all_num_pages(all_num_results)
+    print('4')
+    pp.pprint(all_num_pages)
+    all_rids = get_all_rids(all_num_pages)
+    print('5')
+    pp.pprint(all_rids)
+    """
+
+
+
+def test():
+    pp = pprint.PrettyPrinter(indent=4)
+
+    mypath = "/Users/howie/PycharmProjects/webscraper/venv/html_folder"
+    onlyfiles = [f for f in listdir(mypath) if isfile(join(mypath, f))]
+    pp.pprint(onlyfiles)
+    full_list = []
+    for elem in onlyfiles:
+        full_list.append(join(mypath,elem))
+    sort_files_shift_nums_and_delete_cloud_fare(onlyfiles)
+    """
+    for elem in onlyfiles:
+        print(elem)
+        soup = BeautifulSoup(open(join(mypath,elem)), "html.parser")
+        cloud_fare = cloud_fare_denial_detected(soup)
+        if cloud_fare:
+            print("Bad File: " + basename(elem))
+    """
+
+if __name__ == '__main__':
+    test_main()
 
 
 
